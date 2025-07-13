@@ -1,0 +1,45 @@
+spring:
+  datasource:
+    master:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      jdbc-url: jdbc:mysql://localhost:3306/testdb
+      username: testuser
+      password: testpassword
+      hikari:
+        maximum-pool-size: 20
+        minimum-idle: 5
+        connection-timeout: 30000
+        idle-timeout: 600000
+        max-lifetime: 1800000
+
+    slave:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      jdbc-url: jdbc:mysql://localhost:3306/testdb
+      username: slave_user
+      password: slave_password
+      hikari:
+        maximum-pool-size: 15
+        minimum-idle: 3
+        connection-timeout: 30000
+        idle-timeout: 600000
+        max-lifetime: 1800000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        format_sql: true
+
+logging:
+  level:
+    kr.co.peacefuljw.mybatisjpademo: DEBUG
+    org.springframework.jdbc: DEBUG
+
+mybatis:
+  mapper-locations: classpath:mapper/**/*.xml  # XML 매퍼 위치
+  type-aliases-package: kr.co.peacefuljw.mybatisjpademo.model      # 모델 클래스 패키지
+  configuration:
+    map-underscore-to-camel-case: true
