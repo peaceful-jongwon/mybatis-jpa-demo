@@ -1,0 +1,14 @@
+POST http://localhost:8080/api/users
+Content-Type: application/json
+
+{
+  "name": "젤다",
+  "email": "zelda@example.com",
+  "phoneNumber": "010-8365-1321"
+}
+
+
+<> 2025-07-15T012005.200.json
+
+###
+

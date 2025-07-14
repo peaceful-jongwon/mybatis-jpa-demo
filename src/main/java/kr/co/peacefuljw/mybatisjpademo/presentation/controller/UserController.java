@@ -34,7 +34,7 @@ public class UserController {
 
     @PostMapping
     public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request) {
-        User savedUser = userService.createUser(new User(request.getName(), request.getPhoneNumber()));
+        User savedUser = userService.createUser(new User(request.getName(), request.getEmail(), request.getPhoneNumber()));
         return ResponseEntity.ok(UserResponse.from(savedUser));
     }
 

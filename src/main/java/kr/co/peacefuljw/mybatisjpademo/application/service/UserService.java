@@ -6,8 +6,6 @@ import kr.co.peacefuljw.mybatisjpademo.domain.model.User;
 import kr.co.peacefuljw.mybatisjpademo.domain.repository.CommandUserRepository;
 import kr.co.peacefuljw.mybatisjpademo.domain.repository.QueryUserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,7 +40,7 @@ public class UserService {
     @Transactional
     public User updateUser(Long id, User updateUser) {
         User existingUser = findById(id);
-        existingUser.updateInfo(updateUser.getName(), updateUser.getPhoneNumber());
+        existingUser.updateInfo(updateUser.getName(), updateUser.getEmail(), updateUser.getPhoneNumber());
         return commandUserRepository.save(existingUser);
     }
 

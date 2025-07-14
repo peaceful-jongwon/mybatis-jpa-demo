@@ -4,7 +4,7 @@ spring:
       driver-class-name: com.mysql.cj.jdbc.Driver
       jdbc-url: jdbc:mysql://localhost:3306/testdb
       username: testuser
-      password: testpassword
+      password: testpass
       hikari:
         maximum-pool-size: 20
         minimum-idle: 5
@@ -14,9 +14,9 @@ spring:
 
     slave:
       driver-class-name: com.mysql.cj.jdbc.Driver
-      jdbc-url: jdbc:mysql://localhost:3306/testdb
-      username: slave_user
-      password: slave_password
+      jdbc-url: jdbc:mysql://localhost:3307/testdb
+      username: testuser
+      password: testpass
       hikari:
         maximum-pool-size: 15
         minimum-idle: 3

@@ -35,6 +35,7 @@ public class UserRepositoryImpl implements CommandUserRepository, QueryUserRepos
         return toDomain(repository.save(
             UserEntity.builder()
                     .name(user.getName())
+                    .email(user.getEmail())
                     .phoneNumber(user.getPhoneNumber())
                 .build()));
     }

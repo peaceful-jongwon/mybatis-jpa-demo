@@ -9,7 +9,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy;
-import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
@@ -58,23 +57,6 @@ public class DatabaseConfig {
 
         log.info("라우팅 데이터소스 설정 완료");
         return routingDataSource;
-    }
-
-    public class RoutingDataSource extends AbstractRoutingDataSource {
-
-        @Override
-        protected Object determineCurrentLookupKey() {
-            DataSourceType dataSourceType = DataSourceContextHolder.getDataSourceType();
-            log.debug("라우팅 데이터소스 결정: {}", dataSourceType);
-            return dataSourceType != null ? dataSourceType : DataSourceType.MASTER;
-        }
-
-        @Override
-        protected DataSource determineTargetDataSource() {
-            DataSource dataSource = super.determineTargetDataSource();
-            log.debug("선택된 데이터소스: {}", dataSource.getClass().getSimpleName());
-            return dataSource;
-        }
     }
 
     @Bean

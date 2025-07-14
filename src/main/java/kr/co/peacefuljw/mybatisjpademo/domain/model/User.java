@@ -13,6 +13,7 @@ public class User {
 
     private Long id;
     private String name;
+    private String email;
     private String phoneNumber;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -26,14 +27,16 @@ public class User {
         this.updatedAt = updatedAt;
     }
 
-    public User(String name, String phoneNumber) {
+    public User(String name, String email, String phoneNumber) {
         this.name = name;
+        this.email = email;
         this.phoneNumber = phoneNumber;
         this.createdAt = LocalDateTime.now();
     }
 
-    public void updateInfo(String name, String phoneNumber) {
+    public void updateInfo(String name, String email, String phoneNumber) {
         this.name = name;
+        this.email = email;
         this.phoneNumber = phoneNumber;
     }
 }
