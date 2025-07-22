@@ -1,5 +1,9 @@
 version: '3.8'
 
+networks:
+  mysql-net:
+    driver: bridge
+
 services:
   mysql-master:
     image: mysql:8.0
@@ -10,6 +14,8 @@ services:
       --server-id=1
       --log-bin=mysql-bin
       --binlog-format=ROW
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
     environment:
       MYSQL_ROOT_PASSWORD: rootpassword
       MYSQL_DATABASE: testdb
@@ -22,6 +28,8 @@ services:
       - ./master-init.sql:/docker-entrypoint-initdb.d/init.sql
       - mysql_master_data:/var/lib/mysql
     restart: unless-stopped
+    networks:
+      - mysql-net
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "testuser", "-ptestpass"]
       interval: 30s
@@ -38,6 +46,9 @@ services:
       --log-bin=mysql-bin
       --binlog-format=ROW
       --read-only=1
+      --super-read-only=1
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
     environment:
       MYSQL_ROOT_PASSWORD: rootpassword
       MYSQL_DATABASE: testdb
@@ -47,16 +58,133 @@ services:
     ports:
       - "3307:3306"
     volumes:
-      - ./slave-init.sql:/docker-entrypoint-initdb.d/init.sql
       - mysql_slave_data:/var/lib/mysql
     restart: unless-stopped
+    networks:
+      - mysql-net
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "testuser", "-ptestpass"]
       interval: 30s
       timeout: 10s
       retries: 3
     depends_on:
-      - mysql-master
+      mysql-master:
+        condition: service_healthy
+
+  replication-setup:
+    image: mysql:8.0
+    container_name: replication-setup
+    volumes:
+      - ./setup-replication.sh:/setup-replication.sh
+    networks:
+      - mysql-net
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+      mysql-slave:
+        condition: service_healthy
+    command: >
+      bash -c "
+      echo 'MySQL Master-Slave 복제 설정을 시작합니다...';
+      
+      # 컨테이너 준비 대기
+      echo 'Master 컨테이너 준비 상태 확인 중...';
+      for i in \$$(seq 1 30); do
+        if mysql -h mysql-master -u root -prootpassword -e 'SELECT 1' >/dev/null 2>&1; then
+          echo 'Master 컨테이너 준비 완료!';
+          break;
+        fi;
+        echo \"시도 \$$i/30: Master 컨테이너 대기 중...\";
+        sleep 2;
+      done;
+      
+      echo 'Slave 컨테이너 준비 상태 확인 중...';
+      for i in \$$(seq 1 30); do
+        if mysql -h mysql-slave -u root -prootpassword -e 'SELECT 1' >/dev/null 2>&1; then
+          echo 'Slave 컨테이너 준비 완료!';
+          break;
+        fi;
+        echo \"시도 \$$i/30: Slave 컨테이너 대기 중...\";
+        sleep 2;
+      done;
+      
+      # Master에서 복제 사용자 존재 확인
+      echo '복제 사용자 확인 중...';
+      if ! mysql -h mysql-master -u root -prootpassword -e \"SELECT User FROM mysql.user WHERE User='repl_user';\" | grep -q 'repl_user'; then
+        echo '에러: 복제 사용자 repl_user가 Master에 존재하지 않습니다.';
+        echo 'master-init.sql 파일을 확인하고 컨테이너를 다시 시작하세요.';
+        exit 1;
+      fi;
+      
+      # Master에서 GTID 상태 확인
+      echo 'Master GTID 상태 확인...';
+      GTID_MODE=$$(mysql -h mysql-master -u root -prootpassword -e 'SELECT @@gtid_mode;' -s);
+      if [ \"$$GTID_MODE\" != 'ON' ]; then
+        echo \"에러: Master에서 GTID가 활성화되지 않았습니다. GTID Mode: $$GTID_MODE\";
+        exit 1;
+      fi;
+      
+      # Master에서 바이너리 로그 상태 확인
+      echo 'Master 바이너리 로그 상태 확인...';
+      mysql -h mysql-master -u root -prootpassword -e 'SHOW MASTER STATUS\\G';
+      
+      # Slave에서 GTID 상태 확인
+      echo 'Slave GTID 상태 확인...';
+      SLAVE_GTID_MODE=$$(mysql -h mysql-slave -u root -prootpassword -e 'SELECT @@gtid_mode;' -s);
+      if [ \"$$SLAVE_GTID_MODE\" != 'ON' ]; then
+        echo \"에러: Slave에서 GTID가 활성화되지 않았습니다. GTID Mode: $$SLAVE_GTID_MODE\";
+        exit 1;
+      fi;
+      
+      # Slave에서 복제 설정
+      echo 'Slave에서 복제 설정...';
+      mysql -h mysql-slave -u root -prootpassword -e '
+        STOP SLAVE;
+        RESET SLAVE ALL;
+        CHANGE MASTER TO
+            MASTER_HOST=\"mysql-master\",
+            MASTER_PORT=3306,
+            MASTER_USER=\"repl_user\",
+            MASTER_PASSWORD=\"repl_password\",
+            MASTER_AUTO_POSITION=1;
+        START SLAVE;
+      ';
+      
+      # 복제 상태 확인
+      echo '복제 상태 확인...';
+      sleep 5;
+      
+      SLAVE_STATUS=$$(mysql -h mysql-slave -u root -prootpassword -e 'SHOW SLAVE STATUS\\G');
+      IO_RUNNING=$$(echo \"$$SLAVE_STATUS\" | grep 'Slave_IO_Running:' | awk '{print $$2}');
+      SQL_RUNNING=$$(echo \"$$SLAVE_STATUS\" | grep 'Slave_SQL_Running:' | awk '{print $$2}');
+      LAST_ERROR=$$(echo \"$$SLAVE_STATUS\" | grep 'Last_Error:' | cut -d':' -f2- | sed 's/^ *//');
+      
+      echo \"IO Thread 상태: $$IO_RUNNING\";
+      echo \"SQL Thread 상태: $$SQL_RUNNING\";
+      
+      if [ \"$$LAST_ERROR\" ]; then
+        echo \"마지막 에러: $$LAST_ERROR\";
+      fi;
+      
+      if [ \"$$IO_RUNNING\" = 'Yes' ] && [ \"$$SQL_RUNNING\" = 'Yes' ]; then
+        echo '✅ 복제 설정이 성공적으로 완료되었습니다!';
+        echo '';
+        echo '접속 정보:';
+        echo 'Master (읽기/쓰기): localhost:3306';
+        echo 'Slave (읽기 전용): localhost:3307';
+        echo '';
+        echo '사용자 계정:';
+        echo 'Master - testuser/testpass (읽기/쓰기)';
+      else
+        echo '❌ 복제 설정에 문제가 있습니다.';
+        echo '전체 Slave 상태:';
+        echo \"$$SLAVE_STATUS\";
+        exit 1;
+      fi;
+      
+      echo '복제 설정 완료. 컨테이너를 종료합니다.';
+      "
+    restart: "no"
 
 volumes:
   mysql_master_data:
